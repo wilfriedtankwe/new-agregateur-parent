@@ -5,6 +5,7 @@ import com.opencsv.CSVParserBuilder;
 import com.opencsv.CSVReaderBuilder;
 import com.opencsv.exceptions.CsvException;
 import lombok.Getter;
+import org.springframework.stereotype.Component;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -15,6 +16,7 @@ import java.util.*;
 /**
  * Parseur pour fichiers Crédit Agricole (CA)
  */
+@Component
 @Getter
 public class ParseurCAFile {
 

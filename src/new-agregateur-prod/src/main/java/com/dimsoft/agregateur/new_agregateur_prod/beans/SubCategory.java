@@ -1,7 +1,9 @@
 package com.dimsoft.agregateur.new_agregateur_prod.beans;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
+
 import java.util.Date;
+
 
 @Entity
 @Table(name = "subcategory")
