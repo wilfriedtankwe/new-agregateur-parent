@@ -25,4 +25,14 @@ public class TransactionLCLDto {
 
     private String transactionNotes;
 
+    public TransactionLCLDto() {}
+
+    public TransactionLCLDto(Date date, String transactionLCLLibelle, Double transactionLCLMontant, String transactionNotes) {
+        this.transactionLCLDate = date;
+        this.transactionLCLLibelle = transactionLCLLibelle;
+        this.transactionLCLMontant = transactionLCLMontant;
+        this.transactionNotes = transactionNotes;
+
+    }
+
 }

@@ -5,6 +5,7 @@ import com.dimsoft.agregateur.new_agregateur_prod.services.ImportFileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -19,7 +20,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 
-@Service
+
+@Component
 public class ImportFileServiceImpl implements ImportFileService {
 
     @Autowired

@@ -10,10 +10,11 @@ import com.dimsoft.agregateur.new_agregateur_prod.repositories.BankRepository;
 import com.dimsoft.agregateur.new_agregateur_prod.repositories.BudgetRepository;
 import com.dimsoft.agregateur.new_agregateur_prod.repositories.CompteRepository;
 import com.dimsoft.agregateur.new_agregateur_prod.utils.ManageDuplicateTransaction;
+import jakarta.transaction.Transactional;
 import lombok.Setter;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
-import javax.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
@@ -22,7 +23,7 @@ import java.util.Scanner;
  * Service d'import de transactions dans la table Budget
  * Avec gestion interactive des doublons
  */
-@Service
+@Component
 public class BudgetServiceImportImplement {
 
     private final BudgetRepository budgetRepository;
