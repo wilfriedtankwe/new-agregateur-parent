@@ -42,7 +42,7 @@ public class AggregationService {
     private final BudgetServiceImportImplement budgetServiceImport;
 
     // Chemin du répertoire contenant les fichiers
-    private static final String REPERTOIRE_FICHIERS = "data/fichiers";
+    private static final String REPERTOIRE_FICHIERS = "src/new-agregateur-prod/src/main/resources/data/fichiers";
 
     // Formatters de dates pour CA et LCL
     private static final DateTimeFormatter DATE_FORMATTER_CA = DateTimeFormatter.ofPattern("dd/MM/yyyy");

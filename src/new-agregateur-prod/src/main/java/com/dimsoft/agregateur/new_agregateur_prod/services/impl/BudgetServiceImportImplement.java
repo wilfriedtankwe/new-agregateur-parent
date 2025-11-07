@@ -14,6 +14,8 @@ import jakarta.transaction.Transactional;
 import lombok.Setter;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.NoTransactionException;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +50,73 @@ public class BudgetServiceImportImplement {
     @Setter
     private ManageDuplicateTransaction strategieTest = null;
 
+    /**
+    @Transactional
+    public AggregationResultDto importCATransactions(
+            List<TransactionCADto> transactions,
+            Long compteId,
+            Long bankId) {
+
+        int enregistrees = 0;
+        int ignorees = 0;
+        ManageDuplicateTransaction decisionGlobale = null;
+
+        for (TransactionCADto dto : transactions) {
+            try{
+
+                // 1. Créer le Budget depuis le DTO
+                Budget budget = creerBudgetDepuisCA(dto, compteId, bankId);
+
+                // 2. Chercher si doublon existe
+                Optional<Budget> doublon = budgetRepository.chercherDoublon(
+                        budget.getDateOperation(),
+                        budget.getLibelle(),
+                        budget.getMontant(),
+                        compteId,
+                        bankId
+                );
+
+                // 3. Gérer le doublon
+                if (doublon.isPresent()) {
+                    // Demander à l'utilisateur une seule fois
+                    if (decisionGlobale == null) {
+                        decisionGlobale = demanderDecisionUtilisateur(doublon.get());
+                    }
+
+                    switch (decisionGlobale) {
+                        case ANNULER:
+                            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                            System.out.println("\n Agrégation annulée par l'utilisateur");
+                            return AggregationResultDto.cancelled(
+                                    "veux-tu annulée l'enregistrment en cours remarque aucune données ne sera ajouté en BD"
+                            );
+
+                        case ENREGISTRER_QUAND_MEME:
+                            budgetRepository.save(budget);
+                            enregistrees++;
+                            System.out.println(" Doublon enregistré : " + budget.getLibelle());
+                            break;
+
+                        case SAUTER:
+                            ignorees++;
+                            System.out.println("️ Doublon ignoré : " + budget.getLibelle());
+                            break;
+                    }
+                } else {
+                    // Pas de doublon : enregistrer normalement
+                    budgetRepository.save(budget);
+                    enregistrees++;
+                    System.out.println(" Enregistré : " + budget.getLibelle());
+                }
+            } catch (NoTransactionException e) {
+                throw new RuntimeException(e);
+            }
+
+        }
+
+        return construireResultat(decisionGlobale, enregistrees, ignorees);
+    }**/
+
     @Transactional
     public AggregationResultDto importCATransactions(
             List<TransactionCADto> transactions,
@@ -60,53 +129,138 @@ public class BudgetServiceImportImplement {
 
         for (TransactionCADto dto : transactions) {
 
-            // 1. Créer le Budget depuis le DTO
-            Budget budget = creerBudgetDepuisCA(dto, compteId, bankId);
+            // *** CORRECTION 1 : GESTION D'ERREUR PAR TRANSACTION ***
+            try {
+                // 1. Créer le Budget depuis le DTO
+                Budget budget = creerBudgetDepuisCA(dto, compteId, bankId);
 
-            // 2. Chercher si doublon existe
-            Optional<Budget> doublon = budgetRepository.chercherDoublon(
-                    budget.getDateOperation(),
-                    budget.getLibelle(),
-                    budget.getMontant(),
-                    compteId,
-                    bankId
-            );
+                // 2. Chercher si doublon existe
+                Optional<Budget> doublon = budgetRepository.chercherDoublon(
+                        budget.getDateOperation(),
+                        budget.getLibelle(),
+                        budget.getMontant(),
+                        compteId,
+                        bankId
+                );
 
-            // 3. Gérer le doublon
-            if (doublon.isPresent()) {
-                // Demander à l'utilisateur une seule fois
-                if (decisionGlobale == null) {
-                    decisionGlobale = demanderDecisionUtilisateur(doublon.get());
+                // 3. Gérer le doublon
+                if (doublon.isPresent()) {
+                    // Demander à l'utilisateur une seule fois
+                    if (decisionGlobale == null) {
+                        // Si strategieTest n'est pas null, on est dans un test Gherkin,
+                        // on utilise la stratégie par défaut pour ne pas bloquer.
+                        decisionGlobale = strategieTest != null ? strategieTest : demanderDecisionUtilisateur(doublon.get());
+                    }
+
+                    switch (decisionGlobale) {
+                        case ANNULER:
+                            // *** CORRECTION 2 : FORCER LE ROLLBACK LORS DE L'ANNULATION ***
+                            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+
+                            System.out.println("\n Agrégation annulée par l'utilisateur");
+                            return AggregationResultDto.cancelled(
+                                    "veux-tu annulée l'enregistrment en cours remarque aucune données ne sera ajouté en BD"
+                            );
+
+                        case ENREGISTRER_QUAND_MEME:
+                            budgetRepository.save(budget);
+                            enregistrees++;
+                            System.out.println(" Doublon enregistré : " + budget.getLibelle());
+                            break;
+
+                        case SAUTER:
+                            ignorees++;
+                            System.out.println("️ Doublon ignoré : " + budget.getLibelle());
+                            break;
+                    }
+                } else {
+                    // Pas de doublon : enregistrer normalement
+                    budgetRepository.save(budget);
+                    enregistrees++;
+                    System.out.println(" Enregistré : " + budget.getLibelle());
                 }
 
-                switch (decisionGlobale) {
-                    case ANNULER:
-                        System.out.println("\n Agrégation annulée par l'utilisateur");
-                        return AggregationResultDto.cancelled(
-                                "veux-tu annulée l'enregistrment en cours remarque aucune données ne sera ajouté en BD"
-                        );
+            } catch (Exception e) {
+                // Cette exception (NullPointerException, DataAccessException, etc.)
+                // est la cause de l'erreur "rollback-only" si elle n'est pas gérée.
+                System.err.println("--- ERREUR TRANSACTION IGNORÉE ---");
+                System.err.println("Transaction ignorée à cause de : " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                System.err.println("DTO incriminé: " + dto);
+                System.err.println("----------------------------------");
 
-                    case ENREGISTRER_QUAND_MEME:
-                        budgetRepository.save(budget);
-                        enregistrees++;
-                        System.out.println(" Doublon enregistré : " + budget.getLibelle());
-                        break;
-
-                    case SAUTER:
-                        ignorees++;
-                        System.out.println("️ Doublon ignoré : " + budget.getLibelle());
-                        break;
-                }
-            } else {
-                // Pas de doublon : enregistrer normalement
-                budgetRepository.save(budget);
-                enregistrees++;
-                System.out.println(" Enregistré : " + budget.getLibelle());
+                ignorees++; // On incrémente le compteur d'erreurs/ignorées
+                // On laisse Spring marquer le rollback pour cette transaction si nécessaire
+                // et on continue la boucle pour les autres transactions.
             }
         }
 
         return construireResultat(decisionGlobale, enregistrees, ignorees);
     }
+
+    /**
+    @Transactional
+    public AggregationResultDto importLCLTransactions(
+            List<TransactionLCLDto> transactions,
+            Long compteId,
+            Long bankId) {
+
+        int enregistrees = 0;
+        int ignorees = 0;
+        ManageDuplicateTransaction decisionGlobale = null;
+
+        for (TransactionLCLDto dto : transactions) {
+            try{
+                // 1. Créer le Budget depuis le DTO
+                Budget budget = creerBudgetDepuisLCL(dto, compteId, bankId);
+
+                // 2. Chercher doublon
+                Optional<Budget> doublon = budgetRepository.chercherDoublon(
+                        budget.getDateOperation(),
+                        budget.getLibelle(),
+                        budget.getMontant(),
+                        compteId,
+                        bankId
+                );
+
+                // 3. Gérer le doublon
+                if (doublon.isPresent()) {
+                    if (decisionGlobale == null) {
+                        decisionGlobale = demanderDecisionUtilisateur(doublon.get());
+                    }
+
+                    switch (decisionGlobale) {
+                        case ANNULER:
+                            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                            System.out.println("\n Agrégation annulée");
+                            return AggregationResultDto.cancelled(
+                                    "veux-tu annulée l'enregistrment en cours remarque aucune données ne sera ajouté en BD"
+                            );
+
+                        case ENREGISTRER_QUAND_MEME:
+                            budgetRepository.save(budget);
+                            enregistrees++;
+                            System.out.println(" Doublon enregistré : " + budget.getLibelle());
+                            break;
+
+                        case SAUTER:
+                            ignorees++;
+                            System.out.println(" Doublon ignoré : " + budget.getLibelle());
+                            break;
+                    }
+                } else {
+                    budgetRepository.save(budget);
+                    enregistrees++;
+                    System.out.println(" Enregistré : " + budget.getLibelle());
+                }
+            } catch (NoTransactionException e) {
+                throw new RuntimeException(e);
+            }
+
+        }
+
+        return construireResultat(decisionGlobale, enregistrees, ignorees);
+    }
+    **/
 
     @Transactional
     public AggregationResultDto importLCLTransactions(
@@ -120,46 +274,61 @@ public class BudgetServiceImportImplement {
 
         for (TransactionLCLDto dto : transactions) {
 
-            // 1. Créer le Budget depuis le DTO
-            Budget budget = creerBudgetDepuisLCL(dto, compteId, bankId);
+            // *** CORRECTION 1 : GESTION D'ERREUR PAR TRANSACTION ***
+            try {
 
-            // 2. Chercher doublon
-            Optional<Budget> doublon = budgetRepository.chercherDoublon(
-                    budget.getDateOperation(),
-                    budget.getLibelle(),
-                    budget.getMontant(),
-                    compteId,
-                    bankId
-            );
+                // 1. Créer le Budget depuis le DTO
+                Budget budget = creerBudgetDepuisLCL(dto, compteId, bankId);
 
-            // 3. Gérer le doublon
-            if (doublon.isPresent()) {
-                if (decisionGlobale == null) {
-                    decisionGlobale = demanderDecisionUtilisateur(doublon.get());
+                // 2. Chercher doublon
+                Optional<Budget> doublon = budgetRepository.chercherDoublon(
+                        budget.getDateOperation(),
+                        budget.getLibelle(),
+                        budget.getMontant(),
+                        compteId,
+                        bankId
+                );
+
+                // 3. Gérer le doublon
+                if (doublon.isPresent()) {
+                    if (decisionGlobale == null) {
+                        decisionGlobale = strategieTest != null ? strategieTest : demanderDecisionUtilisateur(doublon.get());
+                    }
+
+                    switch (decisionGlobale) {
+                        case ANNULER:
+                            // *** CORRECTION 2 : FORCER LE ROLLBACK LORS DE L'ANNULATION ***
+                            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+
+                            System.out.println("\n Agrégation annulée");
+                            return AggregationResultDto.cancelled(
+                                    "veux-tu annulée l'enregistrment en cours remarque aucune données ne sera ajouté en BD"
+                            );
+
+                        case ENREGISTRER_QUAND_MEME:
+                            budgetRepository.save(budget);
+                            enregistrees++;
+                            System.out.println(" Doublon enregistré : " + budget.getLibelle());
+                            break;
+
+                        case SAUTER:
+                            ignorees++;
+                            System.out.println(" Doublon ignoré : " + budget.getLibelle());
+                            break;
+                    }
+                } else {
+                    budgetRepository.save(budget);
+                    enregistrees++;
+                    System.out.println(" Enregistré : " + budget.getLibelle());
                 }
 
-                switch (decisionGlobale) {
-                    case ANNULER:
-                        System.out.println("\n Agrégation annulée");
-                        return AggregationResultDto.cancelled(
-                                "veux-tu annulée l'enregistrment en cours remarque aucune données ne sera ajouté en BD"
-                        );
-
-                    case ENREGISTRER_QUAND_MEME:
-                        budgetRepository.save(budget);
-                        enregistrees++;
-                        System.out.println(" Doublon enregistré : " + budget.getLibelle());
-                        break;
-
-                    case SAUTER:
-                        ignorees++;
-                        System.out.println(" Doublon ignoré : " + budget.getLibelle());
-                        break;
-                }
-            } else {
-                budgetRepository.save(budget);
-                enregistrees++;
-                System.out.println(" Enregistré : " + budget.getLibelle());
+            } catch (Exception e) {
+                // Cette exception est la cause de l'erreur "rollback-only"
+                System.err.println("--- ERREUR TRANSACTION IGNORÉE ---");
+                System.err.println("Transaction LCL ignorée à cause de : " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                System.err.println("DTO incriminé: " + dto);
+                System.err.println("----------------------------------");
+                ignorees++; // On incrémente le compteur d'erreurs/ignorées
             }
         }
 

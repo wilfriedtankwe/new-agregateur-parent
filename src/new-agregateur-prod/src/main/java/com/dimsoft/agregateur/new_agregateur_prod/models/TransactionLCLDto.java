@@ -35,4 +35,11 @@ public class TransactionLCLDto {
 
     }
 
+    public TransactionLCLDto(Date transactionLCLDate, String transactionLCLLibelle, Double transactionLCLMontant, Long transactionChequeNumber, String transactionNotes) {
+        this.transactionLCLDate = transactionLCLDate;
+        this.transactionLCLLibelle = transactionLCLLibelle;
+        this.transactionLCLMontant = transactionLCLMontant;
+        this.transactionChequeNumber = transactionChequeNumber;
+        this.transactionNotes = transactionNotes;
+    }
 }
